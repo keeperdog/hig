@@ -1,212 +1,26 @@
-defaults: &defaults
-  docker:
-    - image: cimg/node:16.0.0
+# Use the latest 2.1 version of CircleCI pipeline process engine.
+# See: https://circleci.com/docs/2.0/configuration-reference
+version: 2.1
 
-version: 2
+# Define a job to be invoked later in a workflow.
+# See: https://circleci.com/docs/2.0/configuration-reference/#jobs
 jobs:
-  lockfile-update:
-    <<: *defaults
+  say-hello:
+    # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
+    # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
+    docker:
+      - image: cimg/base:stable
+    # Add steps to the job
+    # See: https://circleci.com/docs/2.0/configuration-reference/#steps
     steps:
       - checkout
       - run:
-          name: Install greenkeeper-lockfile
-          command: 'sudo yarn global add greenkeeper-lockfile@2'
-      - run:
-          name: Update lockfile
-          command: 'greenkeeper-lockfile-update'
-      - save_cache:
-          key: v1-lockfile-{{ .Revision }}
-          paths:
-            # save the git commit
-            - ".git"
-  lockfile-upload:
-    <<: *defaults
-    steps:
-      - checkout
-      - restore_cache:
-          key: v1-lockfile-{{ .Revision }}
-      - run:
-          name: Install greenkeeper-lockfile
-          command: 'sudo yarn global add greenkeeper-lockfile@2'
-      - run:
-          name: SSH Avoid hosts unknown
-          command: 'mkdir -p ~/.ssh/ && echo -e "Host github.com\n\tStrictHostKeyChecking no\n" > ~/.ssh/config'
-      - run:
-          name: Upload lockfile changes
-          command: 'greenkeeper-lockfile-upload'
-  bootstrap:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: Create dependency hash
-          command: yarn run create-dependency-hash
-      - restore_cache:
-          key: v3-dependencies-{{ .Revision }}-{{ checksum ".dependency-hash" }}
-      - run:
-          name: Extract dependencies
-          command: yarn run extract:dependencies
-      - run:
-          name: Install Dependencies
-          command: yarn
-      - run:
-          name: Archive dependencies
-          command: yarn run archive:dependencies
-      - save_cache:
-          key: v3-dependencies-{{ .Revision }}-{{ checksum ".dependency-hash" }}
-          paths:
-            - .archives/dependencies.tgz
-  package-build:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: Create dependency hash
-          command: yarn run create-dependency-hash
-      - restore_cache:
-          key: v3-dependencies-{{ .Revision }}-{{ checksum ".dependency-hash" }}
-      - run:
-          name: Extract dependencies
-          command: yarn run extract:dependencies
-      - run:
-          name: Build all packages
-          command: yarn build
-      - run:
-          name: Archive builds
-          command: yarn run archive:builds
-      - save_cache:
-          key: v1-package-builds-{{ .Revision }}
-          paths:
-            - .archives/builds.tgz
-  react-test:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: Create dependency hash
-          command: yarn run create-dependency-hash
-      - restore_cache:
-          key: v3-dependencies-{{ .Revision }}-{{ checksum ".dependency-hash" }}
-      - restore_cache:
-          key: v1-package-builds-{{ .Revision }}
-      - run:
-          name: Extract dependencies and builds
-          command: yarn run extract
-      - run:
-          name: Lint (React)
-          command: yarn lint
-      - run:
-          name: Run Jest Tests
-          command: yarn test-ci
-      - store_artifacts:
-          path: packages/storybook/coverage
-  canary-packages-deploy:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: Create dependency hash
-          command: yarn run create-dependency-hash
-      - restore_cache:
-          key: v3-dependencies-{{ .Revision }}-{{ checksum ".dependency-hash" }}
-      - restore_cache:
-          key: v1-package-builds-{{ .Revision }}
-      - run:
-          name: Extract dependencies and builds
-          command: yarn run extract
-      - run:
-          name: Add auth token
-          command: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-      - run:
-          name: Deploy pre-release versions of packages
-          command: yarn publish-canary
-  storybook-branch-deploy:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: Create dependency hash
-          command: yarn run create-dependency-hash
-      - restore_cache:
-          key: v3-dependencies-{{ .Revision }}-{{ checksum ".dependency-hash" }}
-      - restore_cache:
-          key: v1-package-builds-{{ .Revision }}
-      - run:
-          name: Extract dependencies and builds
-          command: yarn run extract
-      - run:
-          name: Deploy Storybook
-          command: yarn storybook-deploy-ci
-          no_output_timeout: 20m
-          working_directory: packages/storybook
-  packages-deploy:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: Create dependency hash
-          command: yarn run create-dependency-hash
-      - restore_cache:
-          key: v3-dependencies-{{ .Revision }}-{{ checksum ".dependency-hash" }}
-      - restore_cache:
-          key: v1-package-builds-{{ .Revision }}
-      - run:
-          name: Extract dependencies and builds
-          command: yarn run extract
-      - run:
-          name: Add auth token
-          command: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-      - run:
-          name: Release
-          command: yarn run release
-  post-release:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: Post release
-          command: yarn run post-release
+          name: "Say hello"
+          command: "echo Hello, World!"
+
+# Invoke jobs via workflows
+# See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
-  version: 2
-  build-test-validate-and-deploy:
+  say-hello-workflow:
     jobs:
-      - lockfile-update
-      - bootstrap:
-          requires:
-            - lockfile-update
-      - package-build:
-          requires:
-            - bootstrap
-      - react-test:
-          requires:
-            - package-build
-      - lockfile-upload:
-          requires:
-            - react-test
-      - canary-packages-deploy:
-          filters:
-            branches:
-              only:
-                - /canary-.*/
-          requires:
-            - react-test
-      - storybook-branch-deploy:
-          filters:
-            branches:
-              ignore:
-                - development
-                - master
-          requires:
-            - react-test
-      - packages-deploy:
-          requires:
-            - react-test
-          filters:
-            branches:
-              only: master
-      - post-release:
-          requires:
-            - packages-deploy
-          filters:
-            branches:
-              only: master
+      - say-hello
